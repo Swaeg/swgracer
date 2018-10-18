@@ -1,0 +1,16 @@
+{
+  "name": "swgracer",
+  "version": "0.5.0",
+  "description": "swgracer game",
+  "main": "index.html",
+  "repository": "https://github.com/Swaeg/swgracer.git",
+  "author": "huqa <pikkuhukka@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "babel-core": "^6.24.0",
+    "babel-loader": "^6.4.1",
+    "babel-preset-env": "^1.2.2",
+    "babel-preset-es2015": "^6.24.0",
+    "webpack": "^2.3.1"
+  } 
+}
