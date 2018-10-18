@@ -164,7 +164,6 @@ class Racer {
 
     // handles acceleration and decleration
     handleAccDec() {
-        console.log("handleAccDec")
         // for animating the car when car is running
         if (this.player.speed > 0) {
             this.animInterval = setInterval(() => { this.animateCar(); }, 2000);
@@ -193,7 +192,6 @@ class Racer {
     }
 
     handleTurning() {
-        console.log("handleTurning");
         if (this.keypresses[39]) {
             // right
             if (this.player.speed > 0) {
@@ -264,7 +262,6 @@ class Racer {
 
     // render one frame of game
     renderFrame() {
-        console.log("renderFrame");
         this.context.fillStyle = "#f8dcb5";
         this.context.fillRect(0,0,this.render.width, this.render.height);
         this.handleAccDec();
@@ -283,7 +280,6 @@ class Racer {
     }
 
     renderRoad() {
-        console.log("renderRoad");
         // spritebuffer
         var spriteBuffer = [];
         // index of the players relative position translated to the roadData index
@@ -405,7 +401,6 @@ class Racer {
     }
 
     buildRoad() {
-        console.log("buildRoad");
         // heighState 0 = tasainen, 1=ylÃ¶s, 2=alas
         // curveState 0 = suora, 1=vasen, 2=oikea
         var heightState = 0,
