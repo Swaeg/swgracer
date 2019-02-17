@@ -1,4 +1,5 @@
 var path = require('path');
+var webpack = require('webpack');
 
 const config = {
     entry: path.resolve(__dirname, './src/js/racer.js'),
@@ -7,6 +8,12 @@ const config = {
         path: path.resolve(__dirname, './web/assets/js/')
         //library: 'app'
     },
+    plugins: [
+        new webpack.LoaderOptionsPlugin({
+            debug: true
+        })
+    ],
+    devtool: 'cheap-module-eval-source-map',
     module: {
         rules: [
         {

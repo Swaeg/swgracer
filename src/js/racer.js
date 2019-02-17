@@ -41,6 +41,9 @@ class Racer {
 
         this.ai_car_data = [];
 
+        //TODO road width - dynamic slowing down
+
+
         this.roadParameters = {
             maxCurve: 300, //300
             maxHeight: 1500, //900
@@ -48,6 +51,8 @@ class Racer {
             curvyness: 0.6, //0.6
             heightness: 0.8, // 0.6
             zoneSize: 150,
+            minWidth: 0.4,
+            maxWidth: 1.2
         };
 
         this.render = {
@@ -68,6 +73,8 @@ class Racer {
             maxSpeed: 9,
             speed: 0,
         };
+
+        this.currentRoadWidth = 0.0;
 
         this.animCoefficient = 0;
 
@@ -162,6 +169,10 @@ class Racer {
         this.buildRoad();
     }
 
+    magicInterpolatedOutOfBoundChecker(x) {
+        return ((23.8015 * (x - 1.089) + 9.89866) * (x - 0.407) + 516.779) * (x - 1.599) + 774;
+    }
+
     // handles acceleration and decleration
     handleAccDec() {
         // for animating the car when car is running
@@ -183,8 +194,9 @@ class Racer {
             // slow down if no key is pressed
             this.player.speed -= this.player.dec;
         }
-        // check if car outside boundaries
-        if (Math.abs(this.lastDelta) > 301) {
+        // check if car outside boundaries -- wtf is it with these magic numbers
+        // TODO set lastDelta according to road width
+        if (Math.abs(this.lastDelta) > this.magicInterpolatedOutOfBoundChecker(this.currentRoadWidth)) {
             if (this.player.speed > 2) {
                 this.player.speed -= 0.3;
             }
@@ -287,9 +299,10 @@ class Racer {
 
         // get index of the road segment
         var currentSegmentIndex = (positionIndex - 2) % this.roadData.length;
-        // a negative number, relative position of the camera - player realtive position?
+        // a negative number, relative position of the camera - player relative position
         var currentSegmentPosition = (positionIndex - 2) * this.segmentSize - this.player.posZ;
         var currentSegment = this.roadData[currentSegmentIndex];
+        this.currentRoadWidth = currentSegment.width;
 
         var lastProjectionHeight = Number.POSITIVE_INFINITY;
         //var probedDepth = 0;
@@ -309,11 +322,13 @@ class Racer {
                             playerRelativePosition;
 
         this.lastDelta = this.player.posX - baseOffset*2;
+        console.log(this.lastDelta, this.currentRoadWidth);
         var j = this.render.depthOfField;
         while(j--) {
             // fetch the following segment
             var nextSegmentIndex = (currentSegmentIndex + 1) % this.roadData.length;
             var nextSegment = this.roadData[nextSegmentIndex];
+            //this.currentRoadWidth = nextSegment.width;
 
             var startProjectionHeight = Math.floor((playerHeight - currentSegment.height) * 
                                             this.render.cameraDistance / (this.render.cameraDistance + currentSegmentPosition));
@@ -328,6 +343,7 @@ class Racer {
 
             var halfHeight = this.render.height / 2;
             var halfWidth = this.render.width / 2;
+            
             if (currentHeight > endProjectionHeight) {
                 this.drawSegment(
                     halfHeight + currentHeight,
@@ -336,6 +352,7 @@ class Racer {
                     halfHeight + endProjectionHeight,
                     endScaling,
                     nextSegment.curve - baseOffset - this.lastDelta * endScaling,
+                    nextSegment.width,
                     segmentColourCounter < this.segmentsPerColour,
                     (currentSegmentIndex == 2 || currentSegmentIndex == (this.roadParameters.zones-this.render.depthOfField))
                 );
@@ -416,9 +433,9 @@ class Racer {
                             [0,2,0]],
         currentHeight = 0,
         currentCurve = 0,
-        zones = this.roadParameters.zones;
+        currentWidth = this.roadParameters.minWidth,
+        zones = this.roadParameters.zones; //int
 
-        console.log("build that Road");
         // Build that road
         while(zones--) {
 
@@ -446,25 +463,41 @@ class Racer {
                     curve = this.roadParameters.maxCurve * helper.random();
                     break;
             }
+            var width;
+            width = (this.roadParameters.maxWidth * helper.random()) + this.roadParameters.minWidth;
 
             for(var i=0; i < this.roadParameters.zoneSize; i++) {
 
-                if (i === 70 && zones ===1) {
+                /*if (i === 70 && zones ===1) {
                         var sprite = {
                             type: this.tahti,
                             pos: 0.6,
                             inBuffer: false,
                         };
-                }
+                }*/
 
                 this.roadData.push({
                     height: currentHeight+height / 2 * (1 + Math.sin(i/this.roadParameters.zoneSize * Math.PI - this.piPerTwo)),
                     curve: currentCurve+curve / 2 * (1 + Math.sin(i/this.roadParameters.zoneSize * Math.PI - this.piPerTwo)),
-                    sprite: sprite,
+                    width: currentWidth
+                    //sprite: sprite,
                 });
+                // push additional chunks to smooth step
+                if(i === this.roadParameters.zoneSize-1) {
+                    for(var j = 0; j < 1; j += 0.1) {
+                        this.roadData.push({
+                            height: currentHeight+height / 2 * (1 + Math.sin(i/this.roadParameters.zoneSize * Math.PI - this.piPerTwo)),
+                            curve: currentCurve+curve / 2 * (1 + Math.sin(i/this.roadParameters.zoneSize * Math.PI - this.piPerTwo)),
+                            width: helper.lerp(currentWidth, width, j)
+                        });
+                    }
+                }
             }
             currentCurve += curve;
             currentHeight += height;
+            currentWidth = width;
+            // TODO width transitions for zone
+
             // next zone?
             if(helper.random() < this.roadParameters.heightness) {
                 heightState = heightTransition[heightState][1+Math.round(helper.random())];
@@ -478,9 +511,10 @@ class Racer {
             }
         }
         this.roadParameters.zones = this.roadParameters.zones * this.roadParameters.zoneSize;
+        console.log(this.roadData);
     }
 
-    drawSegment(pos0, scale0, offset0, pos1, scale1, offset1, colourToggle, isStartOrFinish) {
+    drawSegment(pos0, scale0, offset0, pos1, scale1, offset1, deltaW, colourToggle, isStartOrFinish) {
         // TODO colors in seperate object
         var laneColour = (colourToggle) ? "#FFF" : "#777";
         var borderColour = (colourToggle) ? "#696969" : "#696969";
@@ -493,14 +527,16 @@ class Racer {
             laneColour = white;
             roadColour = white;
         }
+
+
         // segment render hierarchy (grass -> road -> border -> lanes)
         this.context.fillStyle = grassColour;
         this.context.fillRect(0, pos1, this.render.width, (pos0-pos1));
         // road
-        this.drawTrapezoid(pos0, scale0, offset0, pos1, scale1, offset1, -0.7, 0.7, roadColour);
+        this.drawTrapezoid(pos0, scale0, offset0, pos1, scale1, offset1, -deltaW, deltaW, roadColour);
         // road borders
-        this.drawTrapezoid(pos0, scale0, offset0, pos1, scale1, offset1, -0.7, -0.67, borderColour);
-        this.drawTrapezoid(pos0, scale0, offset0, pos1, scale1, offset1, 0.67, 0.7, borderColour);
+        this.drawTrapezoid(pos0, scale0, offset0, pos1, scale1, offset1, -deltaW, -deltaW-0.03, borderColour);
+        this.drawTrapezoid(pos0, scale0, offset0, pos1, scale1, offset1, deltaW-0.03, deltaW, borderColour);
         // lanes
         this.drawTrapezoid(pos0, scale0, offset0, pos1, scale1, offset1, -0.01, 0.01, laneColour);
         //this.drawTrapezoid(pos0, scale0, offset0, pos1, scale1, offset1, 0.15, 0.18, laneColour);
@@ -596,8 +632,12 @@ class Racer {
     
 }
 
+let RacerGame;
+
 window.onload = function() {
-    const RacerGame = new Racer();
+    RacerGame = new Racer();
     RacerGame.start();
 };
+
+export default RacerGame;
  
