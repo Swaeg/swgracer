@@ -39,10 +39,7 @@ class Racer {
 
         this.keypresses = [];
 
-        this.ai_car_data = [];
-
-        //TODO road width - dynamic slowing down
-
+        this.npc_sprites = {};
 
         this.roadParameters = {
             maxCurve: 300, //300
@@ -68,7 +65,7 @@ class Racer {
             posZ: 10,
             acc: 0.03,
             dec: 0.3,
-            turning: 4.0,
+            turning: 4.8, // 4.0
             breaking: 0.4,
             maxSpeed: 9,
             speed: 0,
@@ -147,6 +144,9 @@ class Racer {
             w: 314,
             h: 382
         };
+
+        this.temp_car = {};
+
     }
 
     
@@ -165,8 +165,10 @@ class Racer {
         this.canvas.height = this.render.height;
         this.canvas.width = this.render.width;
 
-        // build some road bwwooy
+        this.temp_car = this.car_forward;
+        // build some road 
         this.buildRoad();
+        this.placeSprites();
     }
 
     magicInterpolatedOutOfBoundChecker(x) {
@@ -194,8 +196,7 @@ class Racer {
             // slow down if no key is pressed
             this.player.speed -= this.player.dec;
         }
-        // check if car outside boundaries -- wtf is it with these magic numbers
-        // TODO set lastDelta according to road width
+        // check if car outside boundaries
         if (Math.abs(this.lastDelta) > this.magicInterpolatedOutOfBoundChecker(this.currentRoadWidth)) {
             if (this.player.speed > 2) {
                 this.player.speed -= 0.3;
@@ -299,6 +300,7 @@ class Racer {
 
         // get index of the road segment
         var currentSegmentIndex = (positionIndex - 2) % this.roadData.length;
+
         // a negative number, relative position of the camera - player relative position
         var currentSegmentPosition = (positionIndex - 2) * this.segmentSize - this.player.posZ;
         var currentSegment = this.roadData[currentSegmentIndex];
@@ -324,6 +326,7 @@ class Racer {
         this.lastDelta = this.player.posX - baseOffset*2;
         console.log(this.lastDelta, this.currentRoadWidth);
         var j = this.render.depthOfField;
+        var sprites = [];
         while(j--) {
             // fetch the following segment
             var nextSegmentIndex = (currentSegmentIndex + 1) % this.roadData.length;
@@ -357,7 +360,19 @@ class Racer {
                     (currentSegmentIndex == 2 || currentSegmentIndex == (this.roadParameters.zones-this.render.depthOfField))
                 );
             }
-            if (currentSegment.sprite) {
+            if (this.npc_sprites[currentSegmentIndex]) {
+                spriteBuffer.push({
+                    x: halfWidth - 0.6 * this.render.width *
+                        currentScaling + currentSegment.curve - baseOffset -
+                        (this.player.posX - baseOffset * 2) * currentScaling,
+                    y: halfHeight + startProjectionHeight,
+                    yMax: halfHeight + lastProjectionHeight,
+                    scale: 0.8 * currentScaling,
+                    identity: this.temp_car
+                });   
+            }
+
+            /*if (currentSegment.sprite) {
                 spriteBuffer.push({
                     x: halfWidth - currentSegment.sprite.pos * this.render.width *
                         currentScaling + currentSegment.curve - baseOffset -
@@ -367,7 +382,7 @@ class Racer {
                     scale: 2.5*currentScaling,
                     identity: currentSegment.sprite.type
                 });
-            }
+            }*/
 
             lastProjectionHeight = currentHeight;
 
@@ -376,8 +391,9 @@ class Racer {
             currentSegmentPosition += this.segmentSize;
             // increment colour counter
             segmentColourCounter = (segmentColourCounter + 1) % (2 * this.segmentsPerColour);
-
         }
+
+
         // draw sprites
         var sprite;
         while(sprite = spriteBuffer.pop()) {
@@ -417,9 +433,14 @@ class Racer {
 
     }
 
+    // TODO: place sprites uniformly across the zones?
+    placeSprites() {
+        console.log(this.roadParameters.zones);
+    }
+
     buildRoad() {
-        // heighState 0 = tasainen, 1=ylÃ¶s, 2=alas
-        // curveState 0 = suora, 1=vasen, 2=oikea
+        // heighState 0 = flat, 1=up, 2=down
+        // curveState 0 = straight, 1=left, 2=right
         var heightState = 0,
         heightTransition = [[0,1,2],
                             [0,2,2],
@@ -436,10 +457,13 @@ class Racer {
         currentWidth = this.roadParameters.minWidth,
         zones = this.roadParameters.zones; //int
 
+        var height;
+        //sprites = {};
+
         // Build that road
         while(zones--) {
 
-            var height;
+            //sprites = {};
             switch(heightState) {
                 case 0:
                     height = 0;
@@ -463,25 +487,31 @@ class Racer {
                     curve = this.roadParameters.maxCurve * helper.random();
                     break;
             }
+
             var width;
             width = (this.roadParameters.maxWidth * helper.random()) + this.roadParameters.minWidth;
 
+            //var carInZone = false;
+
             for(var i=0; i < this.roadParameters.zoneSize; i++) {
 
-                /*if (i === 70 && zones ===1) {
-                        var sprite = {
-                            type: this.tahti,
-                            pos: 0.6,
-                            inBuffer: false,
-                        };
+                /*if(helper.random() > 0.98 && !carInZone) {
+                    var z = (i+1)*zones;
+                    if (!this.npc_sprites.hasOwnProperty(z)) {
+                        this.npc_sprites[z] = [];
+                    }
+                    this.npc_sprites[z].push({
+                        identity: this.temp_car
+                    });
+                    carInZone = true;
                 }*/
 
                 this.roadData.push({
                     height: currentHeight+height / 2 * (1 + Math.sin(i/this.roadParameters.zoneSize * Math.PI - this.piPerTwo)),
                     curve: currentCurve+curve / 2 * (1 + Math.sin(i/this.roadParameters.zoneSize * Math.PI - this.piPerTwo)),
                     width: currentWidth
-                    //sprite: sprite,
                 });
+                
                 // push additional chunks to smooth step
                 if(i === this.roadParameters.zoneSize-1) {
                     for(var j = 0; j < 1; j += 0.1) {
@@ -493,10 +523,10 @@ class Racer {
                     }
                 }
             }
+
             currentCurve += curve;
             currentHeight += height;
             currentWidth = width;
-            // TODO width transitions for zone
 
             // next zone?
             if(helper.random() < this.roadParameters.heightness) {
@@ -510,8 +540,9 @@ class Racer {
                 curveState = curveTransition[curveState][0];
             }
         }
-        this.roadParameters.zones = this.roadParameters.zones * this.roadParameters.zoneSize;
+        this.roadParameters.zones = this.roadParameters.zones * this.roadParameters.zoneSize + (10 * this.roadParameters.zones);
         console.log(this.roadData);
+        console.log(this.npc_sprites);
     }
 
     drawSegment(pos0, scale0, offset0, pos1, scale1, offset1, deltaW, colourToggle, isStartOrFinish) {
@@ -591,11 +622,13 @@ class Racer {
     }
 
     drawSprite(sprite) {
+        //var projY = sprite.y - sprite.identity.h * sprite.scale;
         var projY = sprite.y - sprite.identity.h * sprite.scale;
+        var h = 0;
         if (sprite.yMax < sprite.y) {
-            var h = Math.min(sprite.identity.h * (sprite.yMax - projY) / (sprite.identity.h * sprite.scale), sprite.identity.h);
+            h = Math.min(sprite.identity.h * (sprite.yMax - projY) / (sprite.identity.h * sprite.scale), sprite.identity.h);
         } else {
-            var h = sprite.identity.h;
+            h = sprite.identity.h;
         }
         if (h > 0) {
             this.context.drawImage(this.sprites, sprite.identity.x, sprite.identity.y, sprite.identity.w, h, sprite.x, projY, sprite.scale * sprite.identity.w, sprite.scale * h);
